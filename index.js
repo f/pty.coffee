@@ -1,3 +1,2 @@
 require("coffee-script/register");
-var PTYLoader = require("./source/index.coffee");
-module.exports = PTYLoader(process.platform === 'win32');
+module.exports = require("./source/index.coffee");

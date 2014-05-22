@@ -27,23 +27,28 @@
 /* forkpty */
 /* http://www.gnu.org/software/gnulib/manual/html_node/forkpty.html */
 #if defined(__GLIBC__) || defined(__CYGWIN__)
-#include <pty.h>
+  #include <pty.h>
+
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__NetBSD__)
-/**
- * From node v0.11.0 there is also a "util.h" in node/src, which would confuse
- * the compiler when looking for "util.h".
- */
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-#include </usr/include/util.h>
-#else
-#include <util.h>
-#endif
+  /**
+   * From node v0.11.0 there is also a "util.h" in node/src, which would confuse
+   * the compiler when looking for "util.h".
+   */
+  #if NODE_VERSION_AT_LEAST(0, 11, 0)
+    #include </usr/include/util.h>
+  #else
+    #include <util.h>
+  #endif
+
 #elif defined(__FreeBSD__)
-#include <libutil.h>
+  #include <libutil.h>
+
 #elif defined(__sun)
-#include <stropts.h> /* for I_PUSH */
+  #include <stropts.h> /* for I_PUSH */
+
 #else
-#include <pty.h>
+  #include <pty.h>
+
 #endif
 
 #include <termios.h> /* tcgetattr, tty_ioctl */
@@ -51,19 +56,23 @@
 /* environ for execvpe */
 /* node/src/node_child_process.cc */
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
-#include <crt_externs.h>
-#define environ (*_NSGetEnviron())
+  #include <crt_externs.h>
+  #define environ (*_NSGetEnviron())
+
 #else
-extern char **environ;
+  extern char **environ;
+
 #endif
 
 /* for pty_getproc */
 #if defined(__linux__)
-#include <stdio.h>
-#include <stdint.h>
+  #include <stdio.h>
+  #include <stdint.h>
+
 #elif defined(__APPLE__)
-#include <sys/sysctl.h>
-#include <libproc.h>
+  #include <sys/sysctl.h>
+  #include <libproc.h>
+
 #endif
 
 using namespace node;
@@ -130,6 +139,7 @@ NAN_METHOD(PtyFork) {
   char **argv = new char*[argl];
   argv[0] = strdup(*file);
   argv[argl-1] = NULL;
+
   for (; i < argc; i++) {
     String::Utf8Value arg(argv_->Get(NanNew<Integer>(i))->ToString());
     argv[i+1] = strdup(*arg);
@@ -141,6 +151,7 @@ NAN_METHOD(PtyFork) {
   int envc = env_->Length();
   char **env = new char*[envc+1];
   env[envc] = NULL;
+
   for (; i < envc; i++) {
     String::Utf8Value pair(env_->Get(NanNew<Integer>(i))->ToString());
     env[i] = strdup(*pair);
@@ -372,76 +383,76 @@ pty_nonblock(int fd) {
 
 #if defined(__linux__)
 
-static char *
-pty_getproc(int fd, char *tty) {
-  FILE *f;
-  char *path, *buf;
-  size_t len;
-  int ch;
-  pid_t pgrp;
-  int r;
+  static char *
+  pty_getproc(int fd, char *tty) {
+    FILE *f;
+    char *path, *buf;
+    size_t len;
+    int ch;
+    pid_t pgrp;
+    int r;
 
-  if ((pgrp = tcgetpgrp(fd)) == -1) {
-    return NULL;
-  }
+    if ((pgrp = tcgetpgrp(fd)) == -1) {
+      return NULL;
+    }
 
-  r = asprintf(&path, "/proc/%lld/cmdline", (long long)pgrp);
-  if (r == -1 || path == NULL) return NULL;
+    r = asprintf(&path, "/proc/%lld/cmdline", (long long)pgrp);
+    if (r == -1 || path == NULL) return NULL;
 
-  if ((f = fopen(path, "r")) == NULL) {
+    if ((f = fopen(path, "r")) == NULL) {
+      free(path);
+      return NULL;
+    }
+
     free(path);
-    return NULL;
+
+    len = 0;
+    buf = NULL;
+    while ((ch = fgetc(f)) != EOF) {
+      if (ch == '\0') break;
+      buf = (char *)realloc(buf, len + 2);
+      if (buf == NULL) return NULL;
+      buf[len++] = ch;
+    }
+
+    if (buf != NULL) {
+      buf[len] = '\0';
+    }
+
+    fclose(f);
+    return buf;
   }
-
-  free(path);
-
-  len = 0;
-  buf = NULL;
-  while ((ch = fgetc(f)) != EOF) {
-    if (ch == '\0') break;
-    buf = (char *)realloc(buf, len + 2);
-    if (buf == NULL) return NULL;
-    buf[len++] = ch;
-  }
-
-  if (buf != NULL) {
-    buf[len] = '\0';
-  }
-
-  fclose(f);
-  return buf;
-}
 
 #elif defined(__APPLE__)
 
-static char *
-pty_getproc(int fd, char *tty) {
-  int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, 0 };
-  size_t size;
-  struct kinfo_proc kp;
+  static char *
+  pty_getproc(int fd, char *tty) {
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, 0 };
+    size_t size;
+    struct kinfo_proc kp;
 
-  if ((mib[3] = tcgetpgrp(fd)) == -1) {
-    return NULL;
+    if ((mib[3] = tcgetpgrp(fd)) == -1) {
+      return NULL;
+    }
+
+    size = sizeof kp;
+    if (sysctl(mib, 4, &kp, &size, NULL, 0) == -1) {
+      return NULL;
+    }
+
+    if (*kp.kp_proc.p_comm == '\0') {
+      return NULL;
+    }
+
+    return strdup(kp.kp_proc.p_comm);
   }
-
-  size = sizeof kp;
-  if (sysctl(mib, 4, &kp, &size, NULL, 0) == -1) {
-    return NULL;
-  }
-
-  if (*kp.kp_proc.p_comm == '\0') {
-    return NULL;
-  }
-
-  return strdup(kp.kp_proc.p_comm);
-}
 
 #else
 
-static char *
-pty_getproc(int fd, char *tty) {
-  return NULL;
-}
+  static char *
+  pty_getproc(int fd, char *tty) {
+    return NULL;
+  }
 
 #endif
 
@@ -453,6 +464,7 @@ static int
 pty_openpty(int *amaster, int *aslave, char *name,
             const struct termios *termp,
             const struct winsize *winp) {
+
 #if defined(__sun)
   char *slave_name;
   int slave;
@@ -511,18 +523,18 @@ pty_forkpty(int *amaster, char *name,
 
       setsid();
 
-#if defined(TIOCSCTTY)
-      // glibc does this
-      if (ioctl(slave, TIOCSCTTY, NULL) == -1) _exit(1);
-#endif
+      #if defined(TIOCSCTTY)
+        // glibc does this
+        if (ioctl(slave, TIOCSCTTY, NULL) == -1) _exit(1);
+      #endif
 
       dup2(slave, 0);
       dup2(slave, 1);
       dup2(slave, 2);
 
       if (slave > 2) close(slave);
-
       return 0;
+
     default:
       close(slave);
       return pid;
