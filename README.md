@@ -14,7 +14,7 @@ npm install pty.coffee
 ## Example
 
 ```coffee
-{PTY} = require('pty.coffee');
+{PTY} = require 'pty.coffee'
 
 term = new PTY 'bash', [],
   name: 'xterm-color'
